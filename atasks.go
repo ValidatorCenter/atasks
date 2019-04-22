@@ -165,13 +165,30 @@ func returnOfCommission() {
 				return
 			}
 
-			//TODO: Суммировать по пользователю?! кто будет платить за комиссию транзакции??
+			//С суммированием по пользователю и виду монеты
 			for _, d := range data {
-				cntList = append(cntList, m.TxOneSendCoinData{
-					Coin:      CoinNet,
-					ToAddress: d.Address, //Кому переводим
-					Value:     d.Amount,
-				})
+				// Лист мультиотправки
+				srchInList := false
+				posic := 0
+				for iL, _ := range cntList {
+					if cntList[iL].Coin == CoinNet && cntList[iL].ToAddress == d.Address {
+						srchInList = true
+						posic = iL
+					}
+				}
+				if !srchInList {
+					// новый адрес+монета
+					cntList = append(cntList, m.TxOneSendCoinData{
+						Coin:      CoinNet,
+						ToAddress: d.Address, //Кому переводим
+						Value:     d.Amount,
+					})
+				} else {
+					// уже есть такой адрес, суммируем
+					cntList[posic].Value += d.Amount
+
+				}
+				// Готовим данные обратно для отправки на сайт, список задач исполненных
 				resActive.QList = append(resActive.QList, TodoOneQ{
 					Type:    d.Type,
 					Height:  d.Height,
@@ -181,6 +198,7 @@ func returnOfCommission() {
 				totalAmount += d.Amount
 			}
 
+			//TODO: кто будет платить за комиссию транзакции??
 			mSndDt := m.TxMultiSendCoinData{
 				List:     cntList,
 				Payload:  tagVersion,
@@ -191,7 +209,7 @@ func returnOfCommission() {
 			log("INF", "TX", fmt.Sprint(getMinString(sdk.AccAddress), fmt.Sprintf("multisend, amnt: %d amnt.coin: %f", len(cntList), totalAmount)))
 			resHash, err := sdk.TxMultiSendCoin(&mSndDt)
 
-			err = nil
+			//err = nil//dbg
 
 			if err != nil {
 				log("ERR", err.Error(), "")
