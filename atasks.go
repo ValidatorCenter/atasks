@@ -37,17 +37,17 @@ var (
 
 // Задачи для исполнения ноде
 type NodeTodo struct {
-	Priority uint      // от 0 до макс! главные:(0)?, (1)возврат делегатам,(2) на возмещение штрафов,(3) оплата сервера, на развитие, (4) распределние между соучредителями
-	Done     bool      // выполнено
-	Created  time.Time // создана time
-	DoneT    time.Time // выполнено time
-	Type     string    // тип задачи: SEND-CASHBACK,...
-	Height   int       // блок
-	PubKey   string    // мастернода
-	Address  string    // адрес кошелька X
-	Amount   float32   // сумма
-	Comment  string    // комментарий
-	TxHash   string    // транзакция исполнения
+	Priority uint      `json:"priority"`   // от 0 до макс! главные:(0)?, (1)возврат делегатам,(2) на возмещение штрафов,(3) оплата сервера, на развитие, (4) распределние между соучредителями
+	Done     bool      `json:"done"`       // выполнено
+	Created  time.Time `json:"created"`    // создана time
+	DoneT    time.Time `json:"donet"`      // выполнено time
+	Type     string    `json:"type"`       // тип задачи: SEND-CASHBACK,...
+	Height   int       `json:"height_i32"` // блок
+	PubKey   string    `json:"pub_key"`    // мастернода
+	Address  string    `json:"address"`    // адрес кошелька X
+	Amount   float32   `json:"amount_f32"` // сумма
+	Comment  string    `json:"comment"`    // комментарий
+	TxHash   string    `json:"tx_hash"`    // транзакция исполнения
 }
 
 // Результат выполнения задач валидатора
@@ -96,7 +96,7 @@ func log(tp string, msg1 string, msg2 interface{}) {
 
 // возврат результата
 func returnAct(strJson string) bool {
-	url := fmt.Sprintf("%s/api/v1/autoTask/%s/%s", urlVC, sdk.AccPrivateKey, strJson)
+	url := fmt.Sprintf("%s/api/v1/autoTaskIn/%s/%s", urlVC, sdk.AccPrivateKey, strJson)
 	res, err := http.Get(url)
 	if err != nil {
 		log("ERR", err.Error(), "")
@@ -121,8 +121,8 @@ func returnAct(strJson string) bool {
 }
 
 // возврат комиссии
-func returnOfCommission() {
-	url := fmt.Sprintf("%s/api/v1/autoTask/%s", urlVC, sdk.AccPrivateKey)
+func returnOfCommission(pubkeyNode string) {
+	url := fmt.Sprintf("%s/api/v1/autoTaskOut/%s/%s", urlVC, sdk.AccPrivateKey, pubkeyNode)
 	res, err := http.Get(url)
 	if err != nil {
 		log("ERR", err.Error(), "")
@@ -165,6 +165,8 @@ func returnOfCommission() {
 				return
 			}
 
+			//fmt.Printf("%#v\n", data)
+
 			//С суммированием по пользователю и виду монеты
 			for _, d := range data {
 				// Лист мультиотправки
@@ -176,6 +178,8 @@ func returnOfCommission() {
 						posic = iL
 					}
 				}
+
+				//FIXME: почемуто =0! Mtaad44ef8300abf687ab0532874c94668b9d7b362b3c45170ac0264e6888aae1a
 				if !srchInList {
 					// новый адрес+монета
 					cntList = append(cntList, m.TxOneSendCoinData{
@@ -186,8 +190,8 @@ func returnOfCommission() {
 				} else {
 					// уже есть такой адрес, суммируем
 					cntList[posic].Value += d.Amount
-
 				}
+
 				// Готовим данные обратно для отправки на сайт, список задач исполненных
 				resActive.QList = append(resActive.QList, TodoOneQ{
 					Type:    d.Type,
@@ -207,10 +211,10 @@ func returnOfCommission() {
 			}
 
 			log("INF", "TX", fmt.Sprint(getMinString(sdk.AccAddress), fmt.Sprintf("multisend, amnt: %d amnt.coin: %f", len(cntList), totalAmount)))
+
+			//return //dbg
+
 			resHash, err := sdk.TxMultiSendCoin(&mSndDt)
-
-			//err = nil//dbg
-
 			if err != nil {
 				log("ERR", err.Error(), "")
 			} else {
@@ -258,6 +262,7 @@ func main() {
 	urlVC = cfg.Section("").Key("URL").String()
 	sdk.MnAddress = cfg.Section("").Key("ADDRESS").String()
 	sdk.AccPrivateKey = cfg.Section("").Key("PRIVATKEY").String()
+	pubkeyValid := cfg.Section("").Key("PUBKEY").String()
 	_strChain := cfg.Section("").Key("CHAIN").String()
 	if strings.ToLower(_strChain) == "main" {
 		sdk.ChainMainnet = true
@@ -282,7 +287,7 @@ func main() {
 
 	for { // бесконечный цикл
 		//  возврящаем долги валидатора!!1
-		returnOfCommission()
+		returnOfCommission(pubkeyValid)
 
 		log("", fmt.Sprintf("Pause %dmin .... at this moment it is better to interrupt", Timeout), "")
 		time.Sleep(time.Minute * time.Duration(Timeout)) // пауза ~TimeOut~ мин
