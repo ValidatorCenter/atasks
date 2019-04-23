@@ -29,25 +29,20 @@ var (
 	Timeout int
 )
 
-/*type NodeData struct {
-	PubKey string
-	Prc    int
-	Coin   string
-}*/
+type ReturnAPITask struct {
+	WalletCash float32   `json:"wallet_cash_f32"` // на сумму
+	List       []TaskOne `json:"list"`
+}
 
 // Задачи для исполнения ноде
-type NodeTodo struct {
-	Priority uint      `json:"priority"`   // от 0 до макс! главные:(0)?, (1)возврат делегатам,(2) на возмещение штрафов,(3) оплата сервера, на развитие, (4) распределние между соучредителями
-	Done     bool      `json:"done"`       // выполнено
-	Created  time.Time `json:"created"`    // создана time
-	DoneT    time.Time `json:"donet"`      // выполнено time
-	Type     string    `json:"type"`       // тип задачи: SEND-CASHBACK,...
-	Height   int       `json:"height_i32"` // блок
-	PubKey   string    `json:"pub_key"`    // мастернода
-	Address  string    `json:"address"`    // адрес кошелька X
-	Amount   float32   `json:"amount_f32"` // сумма
-	Comment  string    `json:"comment"`    // комментарий
-	TxHash   string    `json:"tx_hash"`    // транзакция исполнения
+type TaskOne struct {
+	Done    bool      `json:"done"`       // выполнено
+	Created time.Time `json:"created"`    // создана time
+	Type    string    `json:"type"`       // тип задачи: SEND-CASHBACK,...
+	Height  uint32    `json:"height_i32"` // блок
+	PubKey  string    `json:"pub_key"`    // мастернода
+	Address string    `json:"address"`    // адрес кошелька X
+	Amount  float32   `json:"amount_f32"` // сумма
 }
 
 // Результат выполнения задач валидатора
@@ -136,13 +131,14 @@ func returnOfCommission(pubkeyNode string) {
 		return
 	}
 
-	var data []NodeTodo
+	var data ReturnAPITask
 	json.Unmarshal(body, &data)
 
 	// Есть-ли что валидатору возвращать своим делегатам?
-	if len(data) > 0 {
+	if len(data.List) > 0 {
 		fmt.Println("#################################")
-		log("INF", "RETURN", len(data))
+		log("INF", "Wallet cash", data.WalletCash)
+		log("INF", "RETURN", len(data.List))
 		cntList := []m.TxOneSendCoinData{}
 		resActive := NodeTodoQ{}
 		totalAmount := float32(0)
@@ -165,10 +161,10 @@ func returnOfCommission(pubkeyNode string) {
 				return
 			}
 
-			//fmt.Printf("%#v\n", data)
+			fmt.Printf("%#v\n", data)
 
 			//С суммированием по пользователю и виду монеты
-			for _, d := range data {
+			for _, d := range data.List {
 				// Лист мультиотправки
 				srchInList := false
 				posic := 0
@@ -195,7 +191,7 @@ func returnOfCommission(pubkeyNode string) {
 				// Готовим данные обратно для отправки на сайт, список задач исполненных
 				resActive.QList = append(resActive.QList, TodoOneQ{
 					Type:    d.Type,
-					Height:  d.Height,
+					Height:  int(d.Height),
 					PubKey:  d.PubKey,
 					Address: d.Address,
 				})
@@ -212,7 +208,7 @@ func returnOfCommission(pubkeyNode string) {
 
 			log("INF", "TX", fmt.Sprint(getMinString(sdk.AccAddress), fmt.Sprintf("multisend, amnt: %d amnt.coin: %f", len(cntList), totalAmount)))
 
-			//return //dbg
+			return //dbg
 
 			resHash, err := sdk.TxMultiSendCoin(&mSndDt)
 			if err != nil {
