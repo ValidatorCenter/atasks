@@ -161,7 +161,7 @@ func returnOfCommission(pubkeyNode string) {
 				return
 			}
 
-			fmt.Printf("%#v\n", data)
+			//fmt.Printf("%#v\n", data)
 
 			//С суммированием по пользователю и виду монеты
 			for _, d := range data.List {
@@ -206,9 +206,9 @@ func returnOfCommission(pubkeyNode string) {
 				GasPrice: Gas,
 			}
 
-			log("INF", "TX", fmt.Sprint(getMinString(sdk.AccAddress), fmt.Sprintf("multisend, amnt: %d amnt.coin: %f", len(cntList), totalAmount)))
+			log("INF", "TX", fmt.Sprint(getMinString(sdk.AccAddress), fmt.Sprintf(" multisend, amnt: %d amnt.coin: %f", len(cntList), totalAmount)))
 
-			return //dbg
+			//return //dbg
 
 			resHash, err := sdk.TxMultiSendCoin(&mSndDt)
 			if err != nil {
