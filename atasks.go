@@ -53,10 +53,12 @@ type NodeTodoQ struct {
 
 // Идентификатор одной задачи
 type TodoOneQ struct {
-	Type    string `json:"type"`    // тип задачи: SEND-CASHBACK,...
-	Height  int    `json:"height"`  // блок
-	PubKey  string `json:"pubkey"`  // мастернода
-	Address string `json:"address"` // адрес кошелька X
+	Type    string    `json:"type"`       // тип задачи: SEND-CASHBACK,...
+	Height  int       `json:"height"`     // блок
+	PubKey  string    `json:"pubkey"`     // мастернода
+	Address string    `json:"address"`    // адрес кошелька X
+	Created time.Time `json:"created"`    // создана time
+	Amount  float32   `json:"amount_f32"` // сумма
 }
 
 // Результат принятия ответа сервера от автозадач, по задачам валидатора
@@ -194,6 +196,8 @@ func returnOfCommission(pubkeyNode string) {
 					Height:  int(d.Height),
 					PubKey:  d.PubKey,
 					Address: d.Address,
+					Created: d.Created,
+					Amount:  d.Amount,
 				})
 				totalAmount += d.Amount
 			}
