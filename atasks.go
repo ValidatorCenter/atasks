@@ -17,7 +17,8 @@ import (
 )
 
 const tagVersion = "atasks"
-const MIN_TIME_DELEG = 10
+const MIN_TIME_DELEG = 1440 //24ч*60мин
+const MAX_GAS = 10
 
 var (
 	//version string
@@ -27,6 +28,7 @@ var (
 
 	CoinNet string
 	Timeout int
+	MaxGas  int
 )
 
 type ReturnAPITask struct {
@@ -157,9 +159,9 @@ func returnOfCommission(pubkeyNode string) {
 		if valueBuy_f32 > totalAmount {
 
 			Gas, _ := sdk.GetMinGas()
-			if Gas > 10 {
+			if Gas > int64(MaxGas) {
 				// Если комиссия дофига, то ничего делать не будем
-				log("ERR", "Comission GAS > 10", "")
+				log("ERR", fmt.Sprintf("Comission GAS > %d", MaxGas), "")
 				return
 			}
 
@@ -243,7 +245,6 @@ func returnOfCommission(pubkeyNode string) {
 
 func main() {
 	ConfFileName := "atasks.ini"
-	Timeout = MIN_TIME_DELEG
 
 	// проверяем есть ли входной параметр/аргумент
 	if len(os.Args) == 2 {
@@ -269,6 +270,14 @@ func main() {
 	} else {
 		sdk.ChainMainnet = false
 	}
+	Timeout, err = cfg.Section("").Key("PAUSE_MIN").Int()
+	if err != nil {
+		Timeout = MIN_TIME_DELEG
+	}
+	MaxGas, err = cfg.Section("").Key("MAX_GAS").Int()
+	if err != nil {
+		MaxGas = MAX_GAS
+	}
 
 	PubKey, err := m.GetAddressPrivateKey(sdk.AccPrivateKey)
 	if err != nil {
@@ -281,9 +290,7 @@ func main() {
 
 	log("STR", fmt.Sprintf("Platform URL: %s\nNode URL: %s\nAddress: %s\nDef. coin: %s", urlVC, sdk.MnAddress, sdk.AccAddress, CoinNet), "")
 
-	// TODO: получать данные для распределения прибыли Валидатора (NEW NEXT)
-
-	Timeout = 10
+	// TODO: получать данные для распределения прибыли Валидатора - соучредителям
 
 	for { // бесконечный цикл
 		//  возврящаем долги валидатора!!1
