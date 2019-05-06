@@ -1,0 +1,26 @@
+# copy to /etc/systemd/system/
+# sudo systemctl enable atasks
+# sudo systemctl start atasks
+
+[Unit]
+Description=AutoTasks Minter
+After=syslog.target
+After=network.target
+
+[Service]
+Type=simple
+PIDFile=/opt/atasks/service.pid
+User=root
+Group=root
+WorkingDirectory=/opt/atasks
+ExecStart=/opt/atasks/atasks_lin64 /opt/atasks/atasks.ini &
+SyslogIdentifier=atasks_ch
+StandardOutput=syslog
+StandardError=syslog
+OOMScoreAdjust=-100
+TimeoutSec=10
+Restart=always
+LimitNOFILE=16384
+
+[Install]
+WantedBy=multi-user.target
