@@ -77,7 +77,6 @@ func log(tp string, msg1 string, msg2 interface{}) {
 // возврат результата в платформу
 func returnAct(hashID string, hashTrx string) bool {
 	url := fmt.Sprintf("%s/api/v1.1/autoTaskIn/%s/%s/%s", urlVC, sdk.AccPrivateKey, hashID, hashTrx)
-	fmt.Println(url)
 	res, err := http.Get(url)
 	if err != nil {
 		log("ERR", err.Error(), "")
