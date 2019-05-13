@@ -16,7 +16,7 @@ import (
 	"github.com/go-ini/ini"
 )
 
-const tagVersion = "atasks"
+const tagVersion = "aTasKs"
 const MIN_TIME_DELEG = 1440 //24ч*60мин
 const MAX_GAS = 10
 
@@ -31,36 +31,17 @@ var (
 	MaxGas  int
 )
 
-type ReturnAPITask struct {
-	WalletCash float32   `json:"wallet_cash_f32"` // на сумму
-	List       []TaskOne `json:"list"`
+// Структура v.1.1
+type ReturnAPITask1_1 struct {
+	WalletCash float32      `json:"wallet_cash_f32"` // на сумму
+	HashID     string       `json:"hash"`
+	List       []TaskOne1_1 `json:"list"`
 }
 
-// Задачи для исполнения ноде
-type TaskOne struct {
-	Done    bool      `json:"done"`       // выполнено
-	Created time.Time `json:"created"`    // создана time
-	Type    string    `json:"type"`       // тип задачи: SEND-CASHBACK,...
-	Height  uint32    `json:"height_i32"` // блок
-	PubKey  string    `json:"pub_key"`    // мастернода
-	Address string    `json:"address"`    // адрес кошелька X
-	Amount  float32   `json:"amount_f32"` // сумма
-}
-
-// Результат выполнения задач валидатора
-type NodeTodoQ struct {
-	TxHash string     `json:"tx"` // транзакция исполнения
-	QList  []TodoOneQ `json:"ql"`
-}
-
-// Идентификатор одной задачи
-type TodoOneQ struct {
-	Type    string    `json:"type"`       // тип задачи: SEND-CASHBACK,...
-	Height  int       `json:"height"`     // блок
-	PubKey  string    `json:"pubkey"`     // мастернода
-	Address string    `json:"address"`    // адрес кошелька X
-	Created time.Time `json:"created"`    // создана time
-	Amount  float32   `json:"amount_f32"` // сумма
+// Задачи для исполнения ноде v.1.1
+type TaskOne1_1 struct {
+	Address string  `json:"address"`    // адрес кошелька X
+	Amount  float32 `json:"amount_f32"` // сумма
 }
 
 // Результат принятия ответа сервера от автозадач, по задачам валидатора
@@ -93,9 +74,9 @@ func log(tp string, msg1 string, msg2 interface{}) {
 	fmt.Printf("%s %s\n", timeClr, msg0)
 }
 
-// возврат результата
-func returnAct(strJson string) bool {
-	url := fmt.Sprintf("%s/api/v1/autoTaskIn/%s/%s", urlVC, sdk.AccPrivateKey, strJson)
+// возврат результата в платформу
+func returnAct(hashID string, hashTrx string) bool {
+	url := fmt.Sprintf("%s/api/v1.1/autoTaskIn/%s/%s/%s", urlVC, sdk.AccPrivateKey, hashID, hashTrx)
 	res, err := http.Get(url)
 	if err != nil {
 		log("ERR", err.Error(), "")
@@ -119,9 +100,9 @@ func returnAct(strJson string) bool {
 	return true
 }
 
-// возврат комиссии
+// получение данных возвратной комиссии из платформы
 func returnOfCommission(pubkeyNode string) {
-	url := fmt.Sprintf("%s/api/v1/autoTaskOut/%s/%s", urlVC, sdk.AccPrivateKey, pubkeyNode)
+	url := fmt.Sprintf("%s/api/v1.1/autoTaskOut/%s/%s", urlVC, sdk.AccPrivateKey, pubkeyNode)
 	res, err := http.Get(url)
 	if err != nil {
 		log("ERR", err.Error(), "")
@@ -135,7 +116,7 @@ func returnOfCommission(pubkeyNode string) {
 		return
 	}
 
-	var data ReturnAPITask
+	var data ReturnAPITask1_1
 	json.Unmarshal(body, &data)
 
 	// Есть-ли что валидатору возвращать своим делегатам?
@@ -144,7 +125,6 @@ func returnOfCommission(pubkeyNode string) {
 		log("INF", "Wallet cash", data.WalletCash)
 		log("INF", "RETURN", len(data.List))
 		cntList := []m.TxOneSendCoinData{}
-		resActive := NodeTodoQ{}
 		totalAmount := float32(0)
 
 		//Проверить, что необходимая сумма присутствует на счёте
@@ -169,37 +149,10 @@ func returnOfCommission(pubkeyNode string) {
 
 			//С суммированием по пользователю и виду монеты
 			for _, d := range data.List {
-				// Лист мультиотправки
-				srchInList := false
-				posic := 0
-				for iL, _ := range cntList {
-					if cntList[iL].Coin == CoinNet && cntList[iL].ToAddress == d.Address {
-						srchInList = true
-						posic = iL
-					}
-				}
-
-				//FIXME: почемуто =0! Mtaad44ef8300abf687ab0532874c94668b9d7b362b3c45170ac0264e6888aae1a
-				if !srchInList {
-					// новый адрес+монета
-					cntList = append(cntList, m.TxOneSendCoinData{
-						Coin:      CoinNet,
-						ToAddress: d.Address, //Кому переводим
-						Value:     d.Amount,
-					})
-				} else {
-					// уже есть такой адрес, суммируем
-					cntList[posic].Value += d.Amount
-				}
-
-				// Готовим данные обратно для отправки на сайт, список задач исполненных
-				resActive.QList = append(resActive.QList, TodoOneQ{
-					Type:    d.Type,
-					Height:  int(d.Height),
-					PubKey:  d.PubKey,
-					Address: d.Address,
-					Created: d.Created,
-					Amount:  d.Amount,
+				cntList = append(cntList, m.TxOneSendCoinData{
+					Coin:      CoinNet,
+					ToAddress: d.Address, //Кому переводим
+					Value:     d.Amount,
 				})
 				totalAmount += d.Amount
 			}
@@ -216,22 +169,15 @@ func returnOfCommission(pubkeyNode string) {
 
 			//return //dbg
 
-			resHash, err := sdk.TxMultiSendCoin(&mSndDt)
+			hashTrx, err := sdk.TxMultiSendCoin(&mSndDt)
 			if err != nil {
 				log("ERR", err.Error(), "")
 			} else {
-				log("OK", fmt.Sprintf("HASH TX: %s", resHash), "")
-				resActive.TxHash = resHash
+				log("OK", fmt.Sprintf("HASH TX: %s", hashTrx), "")
 
 				// Отсылаем на сайт положительный результат по Возврату (+хэш транзакции)
-				strJson, err := json.Marshal(resActive)
-				if err != nil {
-					log("ERR", err.Error(), "")
-				} else {
-					// Отправляем результат обратно на сайт, платформу VC
-					if returnAct(string(strJson)) {
-						log("OK", "....Ok!", "")
-					}
+				if returnAct(data.HashID, hashTrx) {
+					log("OK", "....Ok!", "")
 				}
 			}
 
