@@ -18,7 +18,7 @@ import (
 
 const tagVersion = "aTasKs"
 const MIN_TIME_DELEG = 1440 //24ч*60мин
-const MAX_GAS = 10
+const MAX_GAS = 1
 
 var (
 	//version string
@@ -119,6 +119,11 @@ func returnOfCommission(pubkeyNode string) {
 	var data ReturnAPITask1_1
 	json.Unmarshal(body, &data)
 
+	err = ioutil.WriteFile(fmt.Sprintf("in_%s_%s.json", time.Now().Format("2006-01-02 15-04-05"), data.HashID), body, 0777)
+	if err != nil {
+		log("ERR", err.Error(), "")
+	}
+
 	// Есть-ли что валидатору возвращать своим делегатам?
 	if len(data.List) > 0 {
 		fmt.Println("#################################")
@@ -147,14 +152,13 @@ func returnOfCommission(pubkeyNode string) {
 
 			//fmt.Printf("%#v\n", data)
 
-			//С суммированием по пользователю и виду монеты
 			for _, d := range data.List {
 				cntList = append(cntList, m.TxOneSendCoinData{
 					Coin:      CoinNet,
 					ToAddress: d.Address, //Кому переводим
 					Value:     d.Amount,
 				})
-				totalAmount += d.Amount
+				totalAmount += d.Amount // для инфомации
 			}
 
 			//TODO: кто будет платить за комиссию транзакции??
@@ -166,8 +170,6 @@ func returnOfCommission(pubkeyNode string) {
 			}
 
 			log("INF", "TX", fmt.Sprint(getMinString(sdk.AccAddress), fmt.Sprintf(" multisend, amnt: %d amnt.coin: %f", len(cntList), totalAmount)))
-
-			//return //dbg
 
 			hashTrx, err := sdk.TxMultiSendCoin(&mSndDt)
 			if err != nil {
