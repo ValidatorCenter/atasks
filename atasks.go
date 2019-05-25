@@ -26,9 +26,10 @@ var (
 	//nodes   []NodeData
 	urlVC string
 
-	CoinNet string
-	Timeout int
-	MaxGas  int
+	CoinNet     string
+	Timeout     int
+	MaxGas      int
+	TaskLogPath string
 )
 
 // Структура v.1.1
@@ -119,7 +120,7 @@ func returnOfCommission(pubkeyNode string) {
 	var data ReturnAPITask1_1
 	json.Unmarshal(body, &data)
 
-	err = ioutil.WriteFile(fmt.Sprintf("in_%s_%s.json", time.Now().Format("2006-01-02 15-04-05"), data.HashID), body, 0777)
+	err = ioutil.WriteFile(fmt.Sprintf("%s/in_%s_%s.json", TaskLogPath, time.Now().Format("2006-01-02 15-04-05"), data.HashID), body, 0777)
 	if err != nil {
 		log("ERR", err.Error(), "")
 	}
@@ -209,6 +210,7 @@ func main() {
 	}
 
 	urlVC = cfg.Section("").Key("URL").String()
+	TaskLogPath = cfg.Section("").Key("TASKLOG_PATH").String()
 	sdk.MnAddress = cfg.Section("").Key("ADDRESS").String()
 	sdk.AccPrivateKey = cfg.Section("").Key("PRIVATKEY").String()
 	pubkeyValid := cfg.Section("").Key("PUBKEY").String()
