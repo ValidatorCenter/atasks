@@ -120,7 +120,7 @@ func returnOfCommission(pubkeyNode string) {
 	var data ReturnAPITask1_1
 	json.Unmarshal(body, &data)
 
-	err = ioutil.WriteFile(fmt.Sprintf("%s/in_%s_%s.json", TaskLogPath, time.Now().Format("2006-01-02 15-04-05"), data.HashID), body, 0777)
+	err = ioutil.WriteFile(fmt.Sprintf("%s/in_%s_%s.json", TaskLogPath, time.Now().Format("2006-01-02 15-04-05"), data.HashID), body, 0644)
 	if err != nil {
 		log("ERR", err.Error(), "")
 	}
