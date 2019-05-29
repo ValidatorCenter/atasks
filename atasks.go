@@ -34,9 +34,11 @@ var (
 
 // Структура v.1.1
 type ReturnAPITask1_1 struct {
-	WalletCash float32      `json:"wallet_cash_f32"` // на сумму
-	HashID     string       `json:"hash"`
-	List       []TaskOne1_1 `json:"list"`
+	WalletCash  float32      `json:"wallet_cash_f32"` // на сумму
+	HashID      string       `json:"hash"`
+	BlockStart  uint32       `json:"block_start"`
+	BlockFinish uint32       `json:"block_finish"`
+	List        []TaskOne1_1 `json:"list"`
 }
 
 // Задачи для исполнения ноде v.1.1
@@ -165,7 +167,7 @@ func returnOfCommission(pubkeyNode string) {
 			//TODO: кто будет платить за комиссию транзакции??
 			mSndDt := m.TxMultiSendCoinData{
 				List:     cntList,
-				Payload:  tagVersion,
+				Payload:  fmt.Sprintf("%s %d-%d", tagVersion, data.BlockStart, data.BlockFinish),
 				GasCoin:  CoinNet,
 				GasPrice: Gas,
 			}
