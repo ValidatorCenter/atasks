@@ -18,7 +18,7 @@ import (
 
 const tagVersion = "aTasKs"
 const MIN_TIME_DELEG = 1440 //24ч*60мин
-const MAX_GAS = 10
+const MAX_GAS = 1
 
 var (
 	//version string
@@ -26,16 +26,19 @@ var (
 	//nodes   []NodeData
 	urlVC string
 
-	CoinNet string
-	Timeout int
-	MaxGas  int
+	CoinNet     string
+	Timeout     int
+	MaxGas      int
+	TaskLogPath string
 )
 
 // Структура v.1.1
 type ReturnAPITask1_1 struct {
-	WalletCash float32      `json:"wallet_cash_f32"` // на сумму
-	HashID     string       `json:"hash"`
-	List       []TaskOne1_1 `json:"list"`
+	WalletCash  float32      `json:"wallet_cash_f32"` // на сумму
+	HashID      string       `json:"hash"`
+	BlockStart  uint32       `json:"block_start"`
+	BlockFinish uint32       `json:"block_finish"`
+	List        []TaskOne1_1 `json:"list"`
 }
 
 // Задачи для исполнения ноде v.1.1
@@ -119,6 +122,11 @@ func returnOfCommission(pubkeyNode string) {
 	var data ReturnAPITask1_1
 	json.Unmarshal(body, &data)
 
+	err = ioutil.WriteFile(fmt.Sprintf("%s/in_%s_%s.json", TaskLogPath, time.Now().Format("2006-01-02 15-04-05"), data.HashID), body, 0644)
+	if err != nil {
+		log("ERR", err.Error(), "")
+	}
+
 	// Есть-ли что валидатору возвращать своим делегатам?
 	if len(data.List) > 0 {
 		fmt.Println("#################################")
@@ -147,27 +155,24 @@ func returnOfCommission(pubkeyNode string) {
 
 			//fmt.Printf("%#v\n", data)
 
-			//С суммированием по пользователю и виду монеты
 			for _, d := range data.List {
 				cntList = append(cntList, m.TxOneSendCoinData{
 					Coin:      CoinNet,
 					ToAddress: d.Address, //Кому переводим
 					Value:     d.Amount,
 				})
-				totalAmount += d.Amount
+				totalAmount += d.Amount // для инфомации
 			}
 
 			//TODO: кто будет платить за комиссию транзакции??
 			mSndDt := m.TxMultiSendCoinData{
 				List:     cntList,
-				Payload:  tagVersion,
+				Payload:  fmt.Sprintf("%s %d-%d", tagVersion, data.BlockStart, data.BlockFinish),
 				GasCoin:  CoinNet,
 				GasPrice: Gas,
 			}
 
 			log("INF", "TX", fmt.Sprint(getMinString(sdk.AccAddress), fmt.Sprintf(" multisend, amnt: %d amnt.coin: %f", len(cntList), totalAmount)))
-
-			//return //dbg
 
 			hashTrx, err := sdk.TxMultiSendCoin(&mSndDt)
 			if err != nil {
@@ -207,6 +212,7 @@ func main() {
 	}
 
 	urlVC = cfg.Section("").Key("URL").String()
+	TaskLogPath = cfg.Section("").Key("TASKLOG_PATH").String()
 	sdk.MnAddress = cfg.Section("").Key("ADDRESS").String()
 	sdk.AccPrivateKey = cfg.Section("").Key("PRIVATKEY").String()
 	pubkeyValid := cfg.Section("").Key("PUBKEY").String()
