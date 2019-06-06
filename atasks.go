@@ -32,19 +32,19 @@ var (
 	TaskLogPath string
 )
 
-// Структура v.1.1
-type ReturnAPITask1_1 struct {
-	WalletCash  float32      `json:"wallet_cash_f32"` // на сумму
+type ReturnAPITask1_2 struct {
+	WalletCash  float32      `json:"wallet_cash_f32"` // на сумму в базовой монете сети
 	HashID      string       `json:"hash"`
+	RetCoin     string       `json:"ret_coin"`
 	BlockStart  uint32       `json:"block_start"`
 	BlockFinish uint32       `json:"block_finish"`
-	List        []TaskOne1_1 `json:"list"`
+	List        []TaskOne1_2 `json:"list"`
 }
 
-// Задачи для исполнения ноде v.1.1
-type TaskOne1_1 struct {
+// Задачи для исполнения ноде v.1.2
+type TaskOne1_2 struct {
 	Address string  `json:"address"`    // адрес кошелька X
-	Amount  float32 `json:"amount_f32"` // сумма
+	Amount  float32 `json:"amount_f32"` // сумма в базовой монете сети
 }
 
 // Результат принятия ответа сервера от автозадач, по задачам валидатора
@@ -78,8 +78,8 @@ func log(tp string, msg1 string, msg2 interface{}) {
 }
 
 // возврат результата в платформу
-func returnAct(hashID string, hashTrx string) bool {
-	url := fmt.Sprintf("%s/api/v1.1/autoTaskIn/%s/%s/%s", urlVC, sdk.AccPrivateKey, hashID, hashTrx)
+func returnAct(hashID string, hashTrx string, coinPrice float32) bool {
+	url := fmt.Sprintf("%s/api/v1.2/autoTaskIn/%s/%s/%f", urlVC, hashID, hashTrx, coinPrice)
 	res, err := http.Get(url)
 	if err != nil {
 		log("ERR", err.Error(), "")
@@ -105,7 +105,7 @@ func returnAct(hashID string, hashTrx string) bool {
 
 // получение данных возвратной комиссии из платформы
 func returnOfCommission(pubkeyNode string) {
-	url := fmt.Sprintf("%s/api/v1.1/autoTaskOut/%s/%s", urlVC, sdk.AccPrivateKey, pubkeyNode)
+	url := fmt.Sprintf("%s/api/v1.2/autoTaskOut/%s/%s", urlVC, sdk.AccPrivateKey, pubkeyNode)
 	res, err := http.Get(url)
 	if err != nil {
 		log("ERR", err.Error(), "")
@@ -119,7 +119,7 @@ func returnOfCommission(pubkeyNode string) {
 		return
 	}
 
-	var data ReturnAPITask1_1
+	var data ReturnAPITask1_2
 	json.Unmarshal(body, &data)
 
 	err = ioutil.WriteFile(fmt.Sprintf("%s/in_%s_%s.json", TaskLogPath, time.Now().Format("2006-01-02 15-04-05"), data.HashID), body, 0644)
@@ -153,18 +153,74 @@ func returnOfCommission(pubkeyNode string) {
 				return
 			}
 
-			//fmt.Printf("%#v\n", data)
-
 			for _, d := range data.List {
-				cntList = append(cntList, m.TxOneSendCoinData{
-					Coin:      CoinNet,
-					ToAddress: d.Address, //Кому переводим
-					Value:     d.Amount,
-				})
-				totalAmount += d.Amount // для инфомации
+				totalAmount += d.Amount // подсчет суммы для транзакции
 			}
 
-			//TODO: кто будет платить за комиссию транзакции??
+			coinPrice := float32(1)
+			if data.RetCoin == CoinNet {
+				// Возврат в базовой монете сети
+				for _, d := range data.List {
+					cntList = append(cntList, m.TxOneSendCoinData{
+						Coin:      CoinNet,
+						ToAddress: d.Address, //Кому переводим
+						Value:     d.Amount,
+					})
+				}
+				coinPrice = 1 // 1bip=1bip (!логично)
+			} else {
+				// В кастомной монете
+				sellDt := m.TxSellCoinData{
+					CoinToBuy:   data.RetCoin,
+					CoinToSell:  CoinNet,
+					ValueToSell: totalAmount,
+					GasCoin:     CoinNet,
+					GasPrice:    Gas,
+				}
+				resHash, err := sdk.TxSellCoin(&sellDt)
+				if err != nil {
+					log("ERR", err.Error(), "")
+					return
+				} else {
+					log("OK", fmt.Sprintf("HASH TX: %s", resHash), "")
+				}
+
+				// SLEEP!
+				time.Sleep(time.Second * 10) // пауза 10сек, Nonce чтобы в блокчейна +1
+
+				// Получаем транзакцию покупки монет
+				trns, err := sdk.GetTransaction(resHash)
+				if err != nil {
+					log("ERR", err.Error(), "")
+					return
+				}
+
+				amntRetCoin := trns.Tags.TxReturn
+				if amntRetCoin > 0 {
+					coinPrice = trns.Tags.TxReturn / totalAmount // 1bip=Xtoken
+
+					for _, d := range data.List {
+						retOneAmnt := d.Amount * coinPrice
+						// проверка, что бы не больше чем закупили!
+						if amntRetCoin >= retOneAmnt {
+							//good!
+						} else {
+							retOneAmnt = amntRetCoin
+						}
+						cntList = append(cntList, m.TxOneSendCoinData{
+							Coin:      data.RetCoin,
+							ToAddress: d.Address, //Кому переводим
+							Value:     retOneAmnt,
+						})
+						amntRetCoin -= retOneAmnt
+					}
+				} else {
+					log("ERR", "TxReturn=0", "")
+					return
+				}
+			}
+
+			//Валидатор платит за комиссию транзакции (главное чтобы на счету были BIP для комиссии)
 			mSndDt := m.TxMultiSendCoinData{
 				List:     cntList,
 				Payload:  fmt.Sprintf("%s %d-%d", tagVersion, data.BlockStart, data.BlockFinish),
@@ -181,7 +237,7 @@ func returnOfCommission(pubkeyNode string) {
 				log("OK", fmt.Sprintf("HASH TX: %s", hashTrx), "")
 
 				// Отсылаем на сайт положительный результат по Возврату (+хэш транзакции)
-				if returnAct(data.HashID, hashTrx) {
+				if returnAct(data.HashID, hashTrx, coinPrice) {
 					log("OK", "....Ok!", "")
 				}
 			}
