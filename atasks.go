@@ -78,6 +78,7 @@ func log(tp string, msg1 string, msg2 interface{}) {
 }
 
 // возврат результата в платформу
+// TODO: обработка нескольких транзакций
 func returnAct(hashID string, hashTrx string, coinPrice float32) bool {
 	url := fmt.Sprintf("%s/api/v1.2/autoTaskIn/%s/%s/%f", urlVC, hashID, hashTrx, coinPrice)
 	res, err := http.Get(url)
@@ -156,6 +157,8 @@ func returnOfCommission(pubkeyNode string) {
 			for _, d := range data.List {
 				totalAmount += d.Amount // подсчет суммы для транзакции
 			}
+
+			//FIXME: лимит 100 адресов в транзакции!
 
 			coinPrice := float32(1)
 			if data.RetCoin == CoinNet {
@@ -236,7 +239,7 @@ func returnOfCommission(pubkeyNode string) {
 			} else {
 				log("OK", fmt.Sprintf("HASH TX: %s", hashTrx), "")
 
-				// Отсылаем на сайт положительный результат по Возврату (+хэш транзакции)
+				// Отсылаем на сайт положительный результат по Возврату (+хэш транзакций)
 				if returnAct(data.HashID, hashTrx, coinPrice) {
 					log("OK", "....Ok!", "")
 				}
@@ -298,6 +301,7 @@ func main() {
 
 	log("STR", fmt.Sprintf("Platform URL: %s\nNode URL: %s\nAddress: %s\nDef. coin: %s", urlVC, sdk.MnAddress, sdk.AccAddress, CoinNet), "")
 
+	// TODO: получать данные для распределения прибыли Валидатора - фондам
 	// TODO: получать данные для распределения прибыли Валидатора - соучредителям
 
 	for { // бесконечный цикл
